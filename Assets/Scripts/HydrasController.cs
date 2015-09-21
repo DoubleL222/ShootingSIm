@@ -10,6 +10,7 @@ public class HydrasController : MonoBehaviour {
 	LineRenderer lRenderer;
 	Vector3 fireDir;
 	GameObject rifleInstance;
+	ArrayList gHoles;
 
 	public GameObject BulletHole;
 	public int mode = 1;
@@ -19,6 +20,7 @@ public class HydrasController : MonoBehaviour {
 	// Use this for initialization
 	void Start () 
 	{
+		gHoles = new ArrayList ();
 		fireDir = Vector3.zero;
 		m_hands = GetComponentsInChildren<Hydra>();
 		foreach (Hydra hand in m_hands) {
@@ -104,10 +106,18 @@ public class HydrasController : MonoBehaviour {
 			hand.transform.localRotation  = hand.InitialRotation;
 		}
 	}
+	public void removeHoles(){
+		foreach (GameObject go in gHoles) {
+			Destroy(go);
+		}
+	}
 	protected void Shoot(Hydra hand){
 		RaycastHit hit;
 		if (Physics.Raycast (hand.transform.position, fireDir, out hit)) {
-			Instantiate (BulletHole, hit.point, Quaternion.identity);
+			if(hit.collider.gameObject.tag == "Target"){
+				GameObject gh = Instantiate (BulletHole, hit.point, Quaternion.identity) as GameObject;
+				gHoles.Add(gh);
+			}
 		}
 	}
 	void UpdateLaser(Hydra[] hands)

@@ -37,7 +37,9 @@ public class LineDrawer : MonoBehaviour {
 		Vector3 fwd = transform.TransformDirection (Vector3.forward);
 		RaycastHit hit;
 		if (Physics.Raycast (transform.position, fwd, out hit)) {
-			Instantiate (BulletHole, hit.point, Quaternion.identity);
+			if(hit.collider.gameObject.tag == "Target"){
+				Instantiate (BulletHole, hit.point, Quaternion.identity);
+			}
 		}
 		//GameObject bul1 = Instantiate (bullet, transform.position , transform.rotation) as GameObject;
 		//bul1.transform.Rotate (new Vector3 (90, 0 ,0));
