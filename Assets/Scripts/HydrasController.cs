@@ -1,5 +1,6 @@
-﻿using UnityEngine;
+using UnityEngine;
 using System.Collections;
+using UnityEngine.UI;
 
 public class HydrasController : MonoBehaviour {
 	Hydra[] 	m_hands;
@@ -9,33 +10,88 @@ public class HydrasController : MonoBehaviour {
 	bool 	m_bInitialized;
 	LineRenderer lRenderer;
 	Vector3 fireDir;
+	Vector3 raySource;
 	GameObject rifleInstance;
 	ArrayList gHoles;
+	Vector3 hydrasOffset;
+	bool lukaCalibrated = false;
+	int numClicked=0;
+	Vector3 topLeft, topRight, bottomLeft, bottomRight;
+	float xMin, xMax, yMin, yMax, sWidth, sHeight;
+	float realScreenWidth, realScreenHeight;
 
+	public Image crosshair;
+	public Vector3 HidraScreenCenterDiff;
+	public bool useRifle;
 	public GameObject BulletHole;
 	public int mode = 1;
 	public GameObject rifle;
 	public float laserLength = 10.0f;
+	public GameObject intersectMarker;
+
+
+	Plane screenPlane;
 	
 	// Use this for initialization
+	public Vector3 getFireDir(){
+		return fireDir;
+	}
+	public Vector3 getRaySource(){
+		return raySource;
+	}
 	void Start () 
 	{
+		realScreenHeight = Screen.height;
+		realScreenWidth = Screen.width;
+		hydrasOffset = transform.position; 
+		transform.Translate (HidraScreenCenterDiff);
 		gHoles = new ArrayList ();
 		fireDir = Vector3.zero;
+		raySource = Vector3.zero;
 		m_hands = GetComponentsInChildren<Hydra>();
-		foreach (Hydra hand in m_hands) {
-			if (hand.m_hand == SixenseHands.RIGHT){
-				GameObject GORifle = Instantiate(rifle, hand.transform.position, Quaternion.Euler(new Vector3(0.0f, 180.0f, 0.0f))) as GameObject;
-				//GORifle.transform.parent = hand.gameObject.transform;
-				rifleInstance = GORifle;
+		screenPlane = new Plane (Vector3.right, Vector3.up, new Vector3(1,1,0));
+		if (useRifle) {
+			foreach (Hydra hand in m_hands) {
+				if (hand.m_hand == SixenseHands.RIGHT) {
+					GameObject GORifle = Instantiate (rifle, hand.transform.position, Quaternion.Euler (new Vector3 (0.0f, 180.0f, 0.0f))) as GameObject;
+					//GORifle.transform.parent = hand.gameObject.transform;
+					rifleInstance = GORifle;
+				}
 			}
 		}
 		//w_parts = GetComponentsInChildren<WController>();
+	}
+	float Remap(float value, float from1, float to1, float from2, float to2){
+		return (value - from1) / (to1 - from1) * (to2 - from2) + from2;
+	}
+	void updateCrosshairPos(){
+		Vector3 intersection = calculateIntersection ();
+		if (intersection.x <= xMax && intersection.x >= xMin && intersection.y <= yMax && intersection.y >= yMin) {
+			Debug.Log("pointingAtScreen");
+			float relativeX, relativeY;
+			relativeX = Remap (intersection.x, xMin, xMax, -1.0f, 1.0f);
+			relativeY = Remap (intersection.y, yMin, yMax, -1.0f, 1.0f);
+			Debug.Log("realtive X = " +relativeX+" realtive Y = "+relativeY);
+			crosshair.rectTransform.localPosition = new Vector3(relativeX * realScreenWidth, relativeY * realScreenHeight);
+		}
 	}
 	// Use this for initialization
 	// Update is called once per frame
 	void Update () {
 		{
+			if (lukaCalibrated){
+				Debug.DrawLine(new Vector3(xMin, yMax, 0.0f), new Vector3(xMax,yMax, 0.0f), Color.black);
+				Debug.DrawLine(new Vector3(xMax,yMax, 0.0f), new Vector3(xMax,yMin, 0.0f), Color.black);
+				Debug.DrawLine(new Vector3(xMax,yMin, 0.0f), new Vector3(xMin,yMin, 0.0f), Color.black);
+				Debug.DrawLine(new Vector3(xMin,yMin, 0.0f), new Vector3(xMin,yMax, 0.0f), Color.black);
+				updateCrosshairPos();
+			}
+			if (Input.GetKeyDown (KeyCode.KeypadEnter)) {
+		//		calculateIntersection ();
+			}
+			if(hydrasOffset != transform.position){
+				hydrasOffset = transform.position;
+			}
 			bool bResetHandPosition = false;
 
 			if (lRenderer == null) 
@@ -64,7 +120,7 @@ public class HydrasController : MonoBehaviour {
 					UpdateHand( hand );				
 				}
 			}
-			
+
 			if ( bResetHandPosition )
 			{
 				m_bInitialized = true;
@@ -81,6 +137,33 @@ public class HydrasController : MonoBehaviour {
 			}
 		}
 	}
+	void recordPoints(){
+		Debug.Log ("recording point " + numClicked);
+		switch(numClicked){
+		case 0:
+			topLeft = calculateIntersection();
+			break;
+		case 1:
+			topRight = calculateIntersection();
+			break;
+		case 2: 
+			bottomRight = calculateIntersection();
+			break;
+		case 3: 
+			bottomLeft = calculateIntersection();
+			xMin = (bottomLeft.x + topLeft.x)/2.0f;
+			xMax = (bottomRight.x +topRight.x)/2.0f;
+			yMin = (bottomRight.y +bottomLeft.y)/2.0f;
+			yMax = (topRight.y + topLeft.y)/2.0f;
+			sWidth = xMax-xMin;
+			sHeight = yMax-yMin;
+			lukaCalibrated = true;
+			Debug.Log("CASE 3!!");
+			break;
+		default:
+			break;
+		}
+	}
 	void UpdateHand( Hydra hand )
 	{
 		bool bControllerActive = IsControllerActive( hand.m_controller );
@@ -91,10 +174,19 @@ public class HydrasController : MonoBehaviour {
 			hand.transform.localRotation = hand.m_controller.Rotation * hand.InitialRotation;
 			if( hand.m_hand == SixenseHands.RIGHT)
 			{
-				rifleInstance.transform.position=hand.transform.position;
-				rifleInstance.transform.Translate(new Vector3(0.0f, -0.15f, 0.0f));
+				if(useRifle){
+					rifleInstance.transform.position=hand.transform.position;
+					rifleInstance.transform.Translate(new Vector3(0.0f, -0.15f, 0.0f));
+				}
 				if(hand.m_controller.GetButtonDown(SixenseButtons.TRIGGER)){
-					Shoot(hand);
+					if(!lukaCalibrated){
+						if(numClicked<4){
+							recordPoints();
+							numClicked++;
+						}
+					}else{
+						Shoot(hand);
+					}
 				}
 			}
 		}
@@ -106,6 +198,23 @@ public class HydrasController : MonoBehaviour {
 			hand.transform.localRotation  = hand.InitialRotation;
 		}
 	}
+
+	Vector3 calculateIntersection(){
+		Vector3 planeNormal = screenPlane.normal;
+		Vector3 pointOnPlane = new Vector3 (1, 1, 0);
+		//Debug.Log ("plane normal:" + planeNormal + " fireDir: " + fireDir + " raySource: " + raySource);
+		float top = Vector3.Dot (planeNormal, (raySource - pointOnPlane));
+		float bottom = Vector3.Dot (planeNormal, fireDir);
+		float t = -(top/bottom);
+		Vector3 PIS = raySource + t * fireDir;
+		if (!lukaCalibrated) {
+			Instantiate (intersectMarker, PIS, Quaternion.identity);
+		}
+	//	Debug.Log ("Intersect point :" + PIS);
+		return PIS;
+		
+	}
+
 	public void removeHoles(){
 		foreach (GameObject go in gHoles) {
 			Destroy(go);
@@ -160,10 +269,11 @@ public class HydrasController : MonoBehaviour {
 			Quaternion dir = Quaternion.Lerp(rotR, rotL, 0.5f);
 			position2 = (position1+(dir*(Vector3.forward*laserLength)));
 		}
-		lRenderer.SetPosition (0, position1);
-		lRenderer.SetPosition (1, position2);
+		raySource = position1 + hydrasOffset;
+		lRenderer.SetPosition (0, position1+hydrasOffset);
+		lRenderer.SetPosition (1, position2+hydrasOffset);
 		fireDir = Vector3.Normalize (position2 - position1);
-		UpdateRifle ();
+		if(useRifle)UpdateRifle ();
 		
 	}
 

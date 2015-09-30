@@ -27,7 +27,7 @@ public class LineDrawer : MonoBehaviour {
 				lRenderer = GetComponentInChildren (typeof(LineRenderer)) as LineRenderer;
 			} else {
 				Vector3 endPoint = (this.transform.position + (m_controller.Rotation * (Vector3.forward*length)));
-				lRenderer.SetPosition(0,this.transform.position);
+				lRenderer.SetPosition(0, this.transform.position);
 				lRenderer.SetPosition(1, endPoint);
 			}
 
