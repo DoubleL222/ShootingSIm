@@ -43,6 +43,7 @@ public class HydrasController : MonoBehaviour {
 	{
 		realScreenHeight = Screen.height;
 		realScreenWidth = Screen.width;
+		Debug.Log (realScreenWidth + " " + realScreenHeight);
 		hydrasOffset = transform.position; 
 		transform.Translate (HidraScreenCenterDiff);
 		gHoles = new ArrayList ();
@@ -69,8 +70,8 @@ public class HydrasController : MonoBehaviour {
 		if (intersection.x <= xMax && intersection.x >= xMin && intersection.y <= yMax && intersection.y >= yMin) {
 			Debug.Log("pointingAtScreen");
 			float relativeX, relativeY;
-			relativeX = Remap (intersection.x, xMin, xMax, -1.0f, 1.0f);
-			relativeY = Remap (intersection.y, yMin, yMax, -1.0f, 1.0f);
+			relativeX = Remap (intersection.x, xMin, xMax, -0.5f, 0.5f);
+			relativeY = Remap (intersection.y, yMin, yMax, -0.5f, 0.5f);
 			Debug.Log("realtive X = " +relativeX+" realtive Y = "+relativeY);
 			crosshair.rectTransform.localPosition = new Vector3(relativeX * realScreenWidth, relativeY * realScreenHeight);
 		}
@@ -79,6 +80,10 @@ public class HydrasController : MonoBehaviour {
 	// Update is called once per frame
 	void Update () {
 		{
+			if (Input.GetKeyDown(KeyCode.E)){
+				Debug.Log("clicked E");
+				cameraShoot ();
+			}
 			if (lukaCalibrated){
 				Debug.DrawLine(new Vector3(xMin, yMax, 0.0f), new Vector3(xMax,yMax, 0.0f), Color.black);
 				Debug.DrawLine(new Vector3(xMax,yMax, 0.0f), new Vector3(xMax,yMin, 0.0f), Color.black);
@@ -88,6 +93,9 @@ public class HydrasController : MonoBehaviour {
 			}
 			if (Input.GetKeyDown (KeyCode.KeypadEnter)) {
 		//		calculateIntersection ();
+			}
+			if(Input.GetKeyDown( KeyCode.Space)){
+
 			}
 			if(hydrasOffset != transform.position){
 				hydrasOffset = transform.position;
@@ -218,6 +226,20 @@ public class HydrasController : MonoBehaviour {
 	public void removeHoles(){
 		foreach (GameObject go in gHoles) {
 			Destroy(go);
+		}
+	}
+	void cameraShoot(){
+		Vector3 crossHairPos = crosshair.rectTransform.localPosition;
+		Vector3 rayVector = new Vector3 (crossHairPos.x + realScreenWidth / 2, crossHairPos.y + realScreenHeight / 2, 0);
+		Ray cameraRay = Camera.main.ScreenPointToRay (rayVector);
+		Debug.Log(rayVector);
+		RaycastHit hit;
+		if (Physics.Raycast(cameraRay, out hit, 10)) {
+			Debug.Log ("hitSOmething");
+			if(hit.collider.gameObject.tag == "Target"){
+				GameObject gh = Instantiate (BulletHole, hit.point, Quaternion.identity) as GameObject;
+				gHoles.Add(gh);
+			}
 		}
 	}
 	protected void Shoot(Hydra hand){
