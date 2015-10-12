@@ -10,6 +10,11 @@
 using UnityEngine;
 using System.Collections;
 using System.Runtime.InteropServices;
+using System.IO;
+
+///LUKA CODE
+//kalmanState[] KSRight;
+
 
 /// <summary>
 /// Hand controller is bound to.
@@ -47,11 +52,31 @@ public enum SixenseButtons
 /// </remarks>
 public class SixenseInput : MonoBehaviour
 {
+	//LUKA CODE
+	float recordTime = 5;
+	float finishRec;
+	bool record = false;
+	//ENDOF LUKA CODE
+
+
 	/// <summary>
 	/// Controller objects provide access to Sixense controllers data.
 	/// </summary>
 	public class Controller
 	{
+
+		//LUKA CODE
+		public float finishRecTime;
+		public bool recording = false;
+		public KalmanState[] kStates;
+		bool useKalman = true;
+		StreamWriter tw, twFiltered;
+		float recordTime=3;
+		float estimatedError, processNoise, sensorNoise;
+		bool startedRec = false;
+		//ENDOF LUKA CODE
+
+
 		/// <summary>
 		/// The controller enabled state.
 		/// </summary>
@@ -138,6 +163,16 @@ public class SixenseInput : MonoBehaviour
 		
 		internal Controller()
 		{
+			//LUKA CODE
+			processNoise = 0.1f;
+			sensorNoise = 1.0f;
+			estimatedError = 0.25f;
+			kStates = new KalmanState[3];
+			for(int i=0; i<kStates.Length; i++){
+				kStates[i] = new KalmanState(processNoise,sensorNoise,0.0f,estimatedError,0);
+			}
+			//ENDOF LUKA CODE
+
 			m_Enabled = false;
 			m_Docked = false;
 			m_Hand = SixenseHands.UNKNOWN;
@@ -155,7 +190,39 @@ public class SixenseInput : MonoBehaviour
 		{
 			m_Enabled = enabled;
 		}
-		
+		//LUKA CODE
+		void StartRecording(){
+			Debug.Log("started recording");
+			string path = "Assets/Temporary/ERROR";
+			if (m_Hand == SixenseHands.LEFT) {
+				path = "Assets/Temporary/LEFT/";
+			} else if (m_Hand == SixenseHands.RIGHT) {
+				path = "Assets/Temporary/RIGHT/";
+			}
+			int fileCount = Directory.GetFiles (path).Length;
+			//Debug.Log ("file count" + fileCount);
+			int testNum = 1;
+			if(fileCount>0){
+				testNum = fileCount / 2 + 1;
+			}
+			string path1 = path+"test"+testNum+".txt";
+			string path2 = path+"test"+testNum+"Filtered.txt";
+			//File.Create(path2);
+			tw = new StreamWriter (File.Create (path1));
+			twFiltered = new StreamWriter(File.Create (path2));
+			startedRec = true;
+		}
+		void StopRecording(){
+			Debug.Log("Stopped recording");
+			tw.Close();
+			twFiltered.Close();
+			recording = false;
+			startedRec = false;
+		}
+
+		//ENDOF LUKA CODE
+
+
 		internal void Update( ref SixensePlugin.sixenseControllerData cd )
 		{
 			m_Docked = ( cd.is_docked != 0 );
@@ -165,7 +232,34 @@ public class SixenseInput : MonoBehaviour
 			m_Trigger = cd.trigger;
 			m_JoystickX = cd.joystick_x;
 			m_JoystickY = cd.joystick_y;
-			m_Position.Set( cd.pos[0], cd.pos[1], cd.pos[2] );
+
+
+
+			//LUKA CODE
+			if (recording && !startedRec) {
+				StartRecording ();
+			} else if (recording && startedRec && Time.time>=finishRecTime) {
+				StopRecording ();
+			}
+			Vector3 rawPos = new Vector3(cd.pos[0], cd.pos[1], cd.pos[2] );
+			for(int i =0; i<kStates.Length; i++){
+				kStates[i].kalman_update(rawPos[i]);
+			}
+
+			Vector3 filteredPos = new Vector3 (kStates [0].x, kStates [1].x, kStates [2].x);
+			if (recording && startedRec) {
+				tw.WriteLine(rawPos.x+" "+rawPos.y+" "+rawPos.z);
+				twFiltered.WriteLine(filteredPos.x+" "+filteredPos.y+" "+filteredPos.z);
+			}
+			if (useKalman) {
+				m_Position.Set (filteredPos.x, filteredPos.y, filteredPos.z);
+			} else {
+				m_Position.Set (rawPos.x, rawPos.y, rawPos.z);
+			}
+			//ENDOF LUKA CODE
+
+
+			//m_Position.Set (cd.pos [0], cd.pos [1], cd.pos [2]);
 			m_Rotation.Set( cd.rot_quat[0], cd.rot_quat[1], cd.rot_quat[2], cd.rot_quat[3] );
 			if ( m_Trigger > TriggerButtonThreshold )
 			{
@@ -257,8 +351,18 @@ public class SixenseInput : MonoBehaviour
 	/// <summary>
 	/// Update the static controller data once per frame.
 	/// </summary>
+
+
 	void Update()
 	{
+		//LUKA CODE
+		if (Input.GetKeyDown(KeyCode.R)){
+			finishRec = Time.time + recordTime;
+			record = true;
+			//StartRecording();
+		}
+		//ENDOF LUKA CODE
+
 		// update controller data
 		uint numControllersBound = 0;
 		uint numControllersEnabled = 0;
@@ -269,9 +373,17 @@ public class SixenseInput : MonoBehaviour
 			{
 				if ( SixensePlugin.sixenseIsControllerEnabled( i ) == 1 )
 				{
+					//LUKA CODE
+					if(record) {
+						m_Controllers[i].recording = true;
+						m_Controllers[i].finishRecTime = finishRec;
+					}
+
+					//ENDOF LUKA CODE
 					SixensePlugin.sixenseGetNewestData( i, ref cd );
 					m_Controllers[i].Update( ref cd );
 					m_Controllers[i].SetEnabled( true );
+
 					numControllersEnabled++;
 					if ( ControllerManagerEnabled && ( SixenseInput.Controllers[i].Hand != SixenseHands.UNKNOWN ) )
 					{
@@ -284,7 +396,11 @@ public class SixenseInput : MonoBehaviour
 				}
 			}
 		}
-		
+		//LUKA CODE
+		if (record)	record = false;
+
+		//ENDOF LUKA CODE
+
 		// update controller manager
 		if ( ControllerManagerEnabled )
 		{
