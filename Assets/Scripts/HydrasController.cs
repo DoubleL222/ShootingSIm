@@ -28,15 +28,11 @@ public class HydrasController : MonoBehaviour {
 	List<Vector2> prevCrosshairPos;
 	float SMAy, SMAx;
 	float WMATOTALx;
-	float WMATOTALy;
-	kalmanState KSx;
-	kalmanState[] KSRight;
-	bool recording = false;
-	StreamWriter twFiltered;
-	StreamWriter tw;
-	bool firstIter = true;
-	float finishRec;
-	
+	float WMATOTALy;	
+	GameControllerScript gcs;
+	AudioSource audioS;
+
+	public Image flare;
 	public bool centroid = true;
 	public Vector3 rightHandOffset;
 	public Vector3 leftHandOffset;
@@ -57,34 +53,13 @@ public class HydrasController : MonoBehaviour {
 	public float kalmanGain;
 
 
+	public Vector3 initialRightHandRot;
 	public bool SimpleMovingAverage;
 	public bool WeightedMovingAverage;
 	public int nData = 50;
 
 	Plane screenPlane;
-
-	public class kalmanState {
-		public float q;
-		public float r;
-		public float x;
-		public float p;
-		public float k;
-
-		public kalmanState(float q, float r, float x, float p, float k){
-			this.q = q;
-			this.r = r;
-			this.x = x;
-			this.p = p;
-			this.k = k;
-		}
-	}
-	void kalman_update(kalmanState state, float measurement){
-		state.p = state.p + state.q;
-
-		state.k = state.p / (state.p + state.r);
-		state.x = state.x + state.k * (measurement - state.x);
-		state.p = (1 - state.k) * state.p;
-	}
+	Animator shootAnim;
 
 	// Use this for initialization
 	public Vector3 getFireDir(){
@@ -95,14 +70,16 @@ public class HydrasController : MonoBehaviour {
 	}
 	void Start () 
 	{
+		shootAnim = flare.GetComponent<Animator> ();
+		audioS = GetComponent<AudioSource> ();
+		gcs = GameObject.FindObjectOfType<GameControllerScript> ();
 	//	KSx = new kalmanState (0.0625f, 32.0f, 0.0f, 1.3833094f, 0.043228418f);
-		KSRight = new kalmanState[3];
 		prevCrosshairPos = new List<Vector2> ();
 		crosshairSize = crosshair.rectTransform.rect.width;
-		Debug.Log (crosshairSize);
+		//Debug.Log (crosshairSize);
 		realScreenHeight = Screen.height;
 		realScreenWidth = Screen.width;
-		Debug.Log (realScreenWidth + " " + realScreenHeight);
+		//Debug.Log (realScreenWidth + " " + realScreenHeight);
 		hydrasOffset = transform.position; 
 		transform.Translate (HidraScreenCenterDiff);
 		gHoles = new ArrayList ();
@@ -124,25 +101,7 @@ public class HydrasController : MonoBehaviour {
 	}
 	// Use this for initialization
 	// Update is called once per frame
-	void StartRecording(){
-		int fileCount = Directory.GetFiles ("Assets/Temporary/").Length;
-		//Debug.Log ("file count" + fileCount);
-		int testNum = 0;
-		if(fileCount>0){
-			testNum = fileCount / 2 + 1;
-		}
-		string path1 = "Assets/Temporary/test"+testNum+".txt";
-		string path2 = "Assets/Temporary/test"+testNum+"Filtered.txt";
-		//File.Create(path2);
-		tw = new StreamWriter (File.Create (path1));
-		twFiltered = new StreamWriter(File.Create (path2));
-		recording = true;
-	}
-	void StopRecording(){
-		tw.Close();
-		twFiltered.Close();
-		recording = false;
-	}
+
 	void DrawDebugScreen(){
 		Debug.DrawLine(debugTopLeft, debugTopRight, Color.black);
 		Debug.DrawLine(debugTopRight, debugBottomRight);
@@ -150,28 +109,15 @@ public class HydrasController : MonoBehaviour {
 		Debug.DrawLine(debugBottomLeft, debugTopLeft);
 	}
 	void Update () {
-		{	/*
-			if (Input.GetKeyDown(KeyCode.R)){
-				finishRec = Time.time + recordTime;
-				recording = true;
-				StartRecording();
-				Debug.Log("started recording");
-			}*/
-			if(recording){
-				if(Time.time>=finishRec){
-					StopRecording();
-					Debug.Log("stoped recording");
-					recording = false;
-				}
-			}
-
-			if (Input.GetKeyDown(KeyCode.E)){
-				Debug.Log("clicked E");
-				cameraShoot ();
-			}
+		{
 			if (lukaCalibrated){
 				DrawDebugScreen();
 				updateCrosshairPos();
+			}
+			if (Input.GetKeyDown (KeyCode.E)) {
+				shootAnim.SetTrigger("Shoot");
+				Debug.Log("played anim");
+				audioS.Play();
 			}
 			if (Input.GetKeyDown (KeyCode.KeypadEnter)) {
 		//		calculateIntersection ();
@@ -187,21 +133,23 @@ public class HydrasController : MonoBehaviour {
 				if (lRenderer == null) 
 				{
 					lRenderer = GetComponentInChildren (typeof(LineRenderer)) as LineRenderer;
-				} 
-			}
-			else 
-			{
-				if (m_bInitialized)
+					Debug.Log ("found lineRenderer");
+				} else 
 				{
-					UpdateLaser(m_hands);
+					if (m_bInitialized)
+					{
+						UpdateLaser(m_hands);
+					}
+					//Vector3 endPoint = (this.transform.position + (m_controller.Rotation * (Vector3.forward*length)));
+					
 				}
-				//Vector3 endPoint = (this.transform.position + (m_controller.Rotation * (Vector3.forward*length)));
-
 			}
+
 
 			foreach ( Hydra hand in m_hands )
 			{
-				if ( IsControllerActive( hand.m_controller ) && hand.m_controller.GetButtonDown( SixenseButtons.START ) )
+				//if ( IsControllerActive( hand.m_controller ) && hand.m_controller.GetButtonDown( SixenseButtons.START ) )
+				if ( IsControllerActive( hand.m_controller ) && Input.GetKeyDown(KeyCode.Space))
 				{
 					bResetHandPosition = true;
 				}
@@ -308,7 +256,7 @@ public class HydrasController : MonoBehaviour {
 	}
 
 	void recordPoints(){
-		Debug.Log ("recording point " + numClicked);
+		//Debug.Log ("recording point " + numClicked);
 		switch(numClicked){
 		case 0:
 			topLeft = calculateIntersection();
@@ -332,7 +280,7 @@ public class HydrasController : MonoBehaviour {
 				sWidth = xMax-xMin;
 				sHeight = yMax-yMin;
 				lukaCalibrated = true;
-				Debug.Log("CASE 3!!");
+				//Debug.Log("CASE 3!!");
 			}
 			else
 			{
@@ -386,19 +334,22 @@ public class HydrasController : MonoBehaviour {
 
 
 				lukaCalibrated = true;
-				Debug.Log("CASE 8!!");
+				gcs.calibrated = true;
+				//Debug.Log("CASE 8!!");
 			}
 			break;
 		default:
 			break;
 		}
 	}
+
 	void UpdateHand( Hydra hand )
 	{
 		bool bControllerActive = IsControllerActive( hand.m_controller );
 		
 		if ( bControllerActive )
 		{
+
 
 			Vector3 rawPos = ( hand.m_controller.Position - m_baseOffset ) * m_sensitivity;
 			Quaternion rawRot = hand.m_controller.Rotation * hand.InitialRotation;
@@ -407,63 +358,19 @@ public class HydrasController : MonoBehaviour {
 				KSx = new kalmanState(processNoise,sensorNoise,rawPos.x,estimatedError,kalmanGain);
 				firstIter = false;
 			}*/
-
-			hand.transform.localPosition = rawPos;
 			hand.transform.localRotation = rawRot;
+			hand.transform.localPosition = rawPos;
+
 			if( hand.m_hand == SixenseHands.RIGHT)
 			{
-				if(firstIter){
-					for(int i =0; i<KSRight.Length; i++){
-						switch(i){
-						case 0:
-							KSRight[i] = new kalmanState(processNoise,sensorNoise,rawPos.x,estimatedError,kalmanGain);
-							break;
+				//hand.transform.localPosition = rawPos*-1;
+				//hand.transform.Translate(rightHandOffset);
+				//hand.transform.RotateAround(transform.position, new Vector3(1,0,0), 270);
+				//hand.transform.rotation = Quaternion.Euler(initialRightHandRot);
 
-						case 1:
-							KSRight[i] = new kalmanState(processNoise,sensorNoise,rawPos.y,estimatedError,kalmanGain);
-							break;
-
-						case 2:
-							KSRight[i] = new kalmanState(processNoise,sensorNoise,rawPos.z,estimatedError,kalmanGain);
-							break;
-
-						default:
-							break;
-						}
-					}
-					firstIter = false;
-				}
-				else{
-					for(int i =0; i<KSRight.Length; i++){
-						switch(i){
-						case 0:
-							kalman_update(KSRight[i],rawPos.x);
-							break;
-							
-						case 1:
-							kalman_update(KSRight[i],rawPos.y);
-							break;
-							
-						case 2:
-							kalman_update(KSRight[i],rawPos.z);
-							break;
-							
-						default:
-							break;
-						}	
-					}
-				}
-				
-				//KALMAN FILTER
-				//kalman_update(KSx, rawPos.x);
-				
-				
-
-				if(recording){
-					tw.WriteLine(rawPos.x+" "+rawPos.y+" "+rawPos.z);
-					twFiltered.WriteLine(KSRight[0].x+" "+KSRight[1].x+" "+ KSRight[2].x);
-				}
-				hand.transform.position = hand.transform.position + rightHandOffset;
+				//hand.transform.Rotate(initialRightHandRot);
+				//hand.transform.localRotation = hand.transform.localRotation * Quaternion.Euler(initialRightHandRot);
+				//hand.transform.position = hand.transform.position + rightHandOffset;
 				if(useRifle){
 					rifleInstance.transform.position=hand.transform.position;
 					rifleInstance.transform.Translate(new Vector3(0.0f, -0.15f, 0.0f));
@@ -476,13 +383,17 @@ public class HydrasController : MonoBehaviour {
 						}
 					}else{
 						//Shoot(hand);
+						gcs.fireShot();
 						cameraShoot ();
+						audioS.Play();
+						shootAnim.SetTrigger("Shoot");
 					}
 				}
 			}
 			else if (hand.m_hand == SixenseHands.LEFT) {
-				hand.transform.position = hand.transform.position + leftHandOffset;
+				//hand.transform.position = hand.transform.position + leftHandOffset;
 			}
+
 		}
 		
 		else
@@ -513,20 +424,81 @@ public class HydrasController : MonoBehaviour {
 		foreach (GameObject go in gHoles) {
 			Destroy(go);
 		}
+		gHoles.Clear();
 	}
 	void cameraShoot(){
+		Debug.Log ("SHOT FROM CAMERA");
 		Vector3 crossHairPos = crosshair.rectTransform.localPosition;
 		Vector3 rayVector = new Vector3 (crossHairPos.x + realScreenWidth / 2, crossHairPos.y + realScreenHeight / 2, 0);
 		Ray cameraRay = Camera.main.ScreenPointToRay (rayVector);
-		Debug.Log(rayVector);
-		RaycastHit hit;
+		//RaycastHit2D hit2D = Physics2D.Raycast (cameraRay.origin, cameraRay.direction);
+		RaycastHit2D[] hitList = Physics2D.GetRayIntersectionAll (cameraRay);
+		bool displayHole = false;
+		if (hitList .Length > 0) {
+			Debug.Log(hitList[0].collider.gameObject.tag);
+			bool destroyTarget = false;
+			switch(hitList[0].collider.gameObject.tag){
+			case("Target"):
+				displayHole=true;
+				break;
+			case("7Points"):
+				gcs.addToScore(7);
+				displayHole=true;
+				destroyTarget = true;
+				break;
+			case("8Points"):
+				gcs.addToScore(8);
+				displayHole=true;
+				destroyTarget = true;
+				break;
+			case("9Points"):
+				gcs.addToScore(9);
+				displayHole=true;
+				destroyTarget = true;
+				break;
+			case("10Points"):
+				gcs.addToScore(10);
+				displayHole=true;
+				destroyTarget = true;
+				break;
+			}
+			if(displayHole){
+				float dis1 = Vector2.Distance(hitList[0].point, new Vector2 (cameraRay.origin.x, cameraRay.origin.y));
+				float dis2 = hitList[0].distance;
+				float dis1sqr = dis1*dis1;
+				float dis2sqr = dis2*dis2;
+				float dis3= Mathf.Sqrt(dis2sqr-dis1sqr);
+				GameObject gh = Instantiate (BulletHole, hitList[0].point, Quaternion.identity) as GameObject;
+				gh.gameObject.transform.parent = hitList[0].transform;
+				gh.transform.Translate(new Vector3(0,0,dis3));
+				gHoles.Add(gh);
+				//gh.gameObject.transform.parent = hitList[0].transform;
+			}
+			if(destroyTarget){
+				Destroy(hitList[0].collider.gameObject);
+			}
+		}
+		//Debug.Log(rayVector);
+		/*RaycastHit hit;
 		if (Physics.Raycast(cameraRay, out hit, 10)) {
-			Debug.Log ("hitSOmething");
+			Debug.Log ("hitSOmething with tag"+ hit.collider.gameObject.tag);
 			if(hit.collider.gameObject.tag == "Target"){
 				GameObject gh = Instantiate (BulletHole, hit.point, Quaternion.identity) as GameObject;
 				gHoles.Add(gh);
+			} else 	if(hit.collider.gameObject.tag == "7Points"){
+				GameObject gh = Instantiate (BulletHole, hit.point, Quaternion.identity) as GameObject;
+				gHoles.Add(gh);
+			}else 	if(hit.collider.gameObject.tag == "8Points"){
+				GameObject gh = Instantiate (BulletHole, hit.point, Quaternion.identity) as GameObject;
+				gHoles.Add(gh);
+			}else 	if(hit.collider.gameObject.tag == "9Points"){
+				GameObject gh = Instantiate (BulletHole, hit.point, Quaternion.identity) as GameObject;
+				gHoles.Add(gh);
+			}else if(hit.collider.gameObject.tag == "10Points"){
+				GameObject gh = Instantiate (BulletHole, hit.point, Quaternion.identity) as GameObject;
+				gHoles.Add(gh);
 			}
-		}
+		}*/
 	}
 	protected void Shoot(Hydra hand){
 		RaycastHit hit;
@@ -544,12 +516,14 @@ public class HydrasController : MonoBehaviour {
 		if (mode == 1) {
 			foreach (Hydra hand in hands) {
 				if (hand.m_hand == SixenseHands.RIGHT) {
-					position1 = (hand.m_controller.Position - m_baseOffset) * m_sensitivity;
+				//	position1 = (hand.m_controller.Position - m_baseOffset) * m_sensitivity;
+					position1 = hand.transform.position;
 				} else if (hand.m_hand == SixenseHands.LEFT) {
-					position2 = (hand.m_controller.Position - m_baseOffset) * m_sensitivity;
+				//	position2 = (hand.m_controller.Position - m_baseOffset) * m_sensitivity;
+					position2 = hand.transform.position;
 				}
 			}
-			position2 = Vector3.Normalize((position2 - position1)) * laserLength;
+		//	position2 = Vector3.Normalize((position2 - position1)) * laserLength;
 		} else if (mode == 0) {
 			foreach (Hydra hand in hands) {
 				if (hand.m_hand == SixenseHands.RIGHT) {
@@ -577,12 +551,14 @@ public class HydrasController : MonoBehaviour {
 			Quaternion dir = Quaternion.Lerp(rotR, rotL, 0.5f);
 			position2 = (position1+(dir*(Vector3.forward*laserLength)));
 		}
-		raySource = position1 + hydrasOffset;
-		if (useLine) {
-			lRenderer.SetPosition (0, position1 + hydrasOffset);
-			lRenderer.SetPosition (1, position2 + hydrasOffset);
-		}
+		raySource = position1;
+
 		fireDir = Vector3.Normalize (position2 - position1);
+		if (useLine) {
+			lRenderer.SetPosition (0, position1);
+			lRenderer.SetPosition (1, position1 + fireDir * 10);
+				Debug.Log("set new Position");
+		}
 		if(useRifle)UpdateRifle ();
 		
 	}

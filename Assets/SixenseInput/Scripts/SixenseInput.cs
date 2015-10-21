@@ -256,6 +256,11 @@ public class SixenseInput : MonoBehaviour
 			} else {
 				m_Position.Set (rawPos.x, rawPos.y, rawPos.z);
 			}
+
+			Quaternion rot = new Quaternion (cd.rot_quat [0], cd.rot_quat [1], cd.rot_quat [2], cd.rot_quat [3]);
+			rot = rot * Quaternion.Euler (new Vector3 (225, 0, 0));
+
+			//m_Rotation.Set( rot[0], rot[1], rot[2], rot[3] );
 			//ENDOF LUKA CODE
 
 
@@ -479,7 +484,8 @@ public class SixenseInput : MonoBehaviour
 	/// </summary>
 	void OnGUI()
 	{
-		if ( ControllerManagerEnabled && ( m_ControllerManagerState != ControllerManagerState.NONE ) )
+		//LUKA CODE (ADDED CALIBRATION)
+		if ( ControllerManagerEnabled && ( m_ControllerManagerState != ControllerManagerState.NONE ))
 		{
 			uint boxWidth = 300;
 			uint boxHeight = 24;

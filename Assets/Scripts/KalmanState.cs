@@ -1,7 +1,7 @@
 ﻿using UnityEngine;
 using System.Collections;
 
-public class KalmanState : MonoBehaviour {
+public class KalmanState{
 
 	public float q;
 	public float r;
